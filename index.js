@@ -1,29 +1,42 @@
 import express from 'express';
-import fetch from 'node-fetch';
+import https from 'https';
+import { URL } from 'url';
 
 const app = express();
 app.use(express.json());
 
-app.use('/bybit/*', async (req, res) => {
+app.use('/bybit/*', (req, res) => {
   const path = req.originalUrl.replace('/bybit', '');
-  const target = 'https://api.bybit.com' + path;
+  const targetUrl = new URL('https://api.bybit.com' + path);
 
-  try {
-    const response = await fetch(target, {
-      method: req.method,
-      headers: {
-        ...req.headers,
-        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' // Spoof UA
-      },
-      body: req.method === 'GET' ? undefined : req.body
+  const options = {
+    hostname: targetUrl.hostname,
+    path: targetUrl.pathname + targetUrl.search,
+    method: req.method,
+    headers: {
+      ...req.headers,
+      'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' // UA spoof
+    }
+  };
+
+  const proxy = https.request(options, (bybitRes) => {
+    let data = '';
+    bybitRes.on('data', (chunk) => data += chunk);
+    bybitRes.on('end', () => {
+      res.status(bybitRes.statusCode).send(data);
     });
+  });
 
-    const text = await response.text();
-    res.status(response.status).send(text);
-  } catch (e) {
-    res.status(500).json({ error: true, message: e.message });
+  proxy.on('error', (err) => {
+    res.status(500).json({ error: true, message: err.message });
+  });
+
+  if (req.method !== 'GET' && req.body) {
+    proxy.write(JSON.stringify(req.body));
   }
+
+  proxy.end();
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Proxy server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Proxy running on port ${PORT}`));
