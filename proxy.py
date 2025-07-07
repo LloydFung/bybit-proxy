@@ -27,5 +27,7 @@ def proxy(path):
     except Exception as e:
         return {'error': True, 'message': str(e)}, 500
 
-if __name__ == '__main__':
-    app.run(port=3000)
+if __name__ == "__main__":
+    import os
+    port = int(os.environ.get("PORT", 8080))  # Render 用 PORT 環境變數提供外部 port
+    app.run(host="0.0.0.0", port=port)
